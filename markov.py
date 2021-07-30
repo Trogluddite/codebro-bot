@@ -1,7 +1,7 @@
 import yaml
 import random
 from secrets import SystemRandom
-from multiprocessing import Lock, Manager, Process
+from multiprocess import Lock, Manager, Process
 
 BACKUP_FILE="codebro.yaml" 
 IGNORE_WORDS=["CODEBRO", u"CODEBRO"]
@@ -16,7 +16,7 @@ class Markov():
     
     def load_corpus(self, source_file):
         with open(source_file, 'r') as infile:
-            return yaml.load(infile.read())
+            return yaml.safe_load(infile.read())
 
     def generate_markov_text(self, words, cache, seed_phrase=None):
         w1, w2 = "<START>", ""

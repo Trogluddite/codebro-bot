@@ -26,7 +26,7 @@ def load_settings(settings_file=SETTINGS_FILE):
     token = ""
     settings = {}
     with open(settings_file, "r") as sf:
-        settings = yaml.load(sf)
+        settings = yaml.safe_load(sf)
         token = settings.get("token")
     if not token:
         raise Exception("slack token is required!")
@@ -42,9 +42,9 @@ def handle_message(msg):
 token = load_settings()
 sc = SlackClient(token)
 if sc.rtm_connect():
-    print "###CONNECTED###"
+    print("###CONNECTED###")
 else:
-    print "Connect failed; invalid token?" 
+    print("Connect failed; invalid token?")
 
 #set codebro ID
 users = json.loads(sc.api_call("users.list"))
@@ -64,7 +64,7 @@ while True:
         tmp = current_wait
         current_wait = current_wait + previous_wait
         previous_wait = tmp
-        print "failed; retrying in {time) seconds".format(time=current_wait)
+        print("failed; retrying in {time} seconds").format(time=current_wait)
 
 
 
