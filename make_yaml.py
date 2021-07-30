@@ -21,7 +21,6 @@ def file_to_words():
             tokens.insert(i + 1, "<STOP>")
             tokens.insert(i + 2, "<START>")
         words += tokens 
-    words = map( lambda x: unicode(x), words )     
     return words
 
 

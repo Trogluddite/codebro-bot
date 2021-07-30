@@ -1,7 +1,7 @@
 import yaml
 import random
+from secrets import SystemRandom
 from multiprocessing import Lock, Manager, Process
-from os import urandom
 
 BACKUP_FILE="codebro.yaml" 
 IGNORE_WORDS=["CODEBRO", u"CODEBRO"]
@@ -23,6 +23,7 @@ class Markov():
         if seed_phrase:
             w1,w2 = seed_phrase[0], seed_phrase[1]
         else:
+            urandom = SystemRandom()
             valid_starts = [(x[0], x[1]) for x in cache.keys() if x[0] == "<START>"]
             w1, w2 = valid_starts[urandom.randint(0, len(valid_starts) - 1)]
         
