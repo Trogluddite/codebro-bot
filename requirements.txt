@@ -1,0 +1,3 @@
+discord.py>=1.7.3
+multiprocess>=0.70.12.2
+PyYAML>=5.4.1

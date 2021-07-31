@@ -8,14 +8,14 @@ brain = Markov("codebro.yaml")
 client = discord.Client()
 
 
-def sanitize_and_tokenize(msg):
+def sanitize_and_tokenize(msg: str) -> list:
     msg_tokens = msg.split()
     for i in range(0, len(msg_tokens)):
         msg_tokens[i] = msg_tokens[i].strip("\'\"!@#$%^&*().,/\\+=<>?:;").upper()
     return msg_tokens
 
 
-def getTen():
+def getTen() -> str:
     response = ""
     for i in range(0, 9):
         response += brain.create_response()

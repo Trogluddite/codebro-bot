@@ -9,16 +9,16 @@ IGNORE_WORDS = ["CODEBRO", u"CODEBRO"]
 
 # instantiate a Markov object with the source file
 class Markov():
-    def __init__(self, source_file):
+    def __init__(self, source_file: str):
         self.manager = Manager()
         self.words = self.manager.list(self.load_corpus(source_file))
         self.cache = self.manager.dict(self.database(self.words, {}))
 
-    def load_corpus(self, source_file):
+    def load_corpus(self, source_file: str):
         with open(source_file, 'r') as infile:
             return yaml.safe_load(infile.read())
 
-    def generate_markov_text(self, words, cache, seed_phrase=None):
+    def generate_markov_text(self, words: list, cache: dict, seed_phrase=None):
         w1, w2 = "<START>", ""
         if seed_phrase:
             w1, w2 = seed_phrase[0], seed_phrase[1]
@@ -43,7 +43,7 @@ class Markov():
         for i in range(len(words) - 2):
             yield (words[i], words[i+1], words[i+2])
 
-    def database(self, words, cache):
+    def database(self, words: list, cache: dict):
         for w1, w2, w3 in self.triples(words):
             key = (w1, w2)
             if key in cache:
@@ -53,7 +53,7 @@ class Markov():
                 cache[key] = [w3]
         return cache
 
-    def learn(self, sentence):
+    def learn(self, sentence: str):
         tokens = sentence.split()
 
         # strip, uppercase, and check for inclusion in IGNORE_WORDS list
