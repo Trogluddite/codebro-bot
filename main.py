@@ -1,10 +1,31 @@
 #!/usr/bin/env python
 
+import configargparse
 import discord
 from markov import Markov
 
-token = open("auth.txt", "r").readline()
-brain = Markov("codebro.yaml")
+parser = configargparse.ArgParser(description='CodeBro: A triumph of machine over man.')
+parser.add_argument('-c', '--config',
+                    is_config_file=True,
+                    help='Path to config file in yaml format')
+parser.add_argument('-t', '--token',
+                    env_var="CB_TOKEN",
+                    required=True,
+                    help="This bot's discord bot token.")
+parser.add_argument('-b', '--brain',
+                    env_var="CB_BRAIN",
+                    required=True,
+                    help="This bot's brain as a YAML file.")
+parser.add_argument('-n', '--name',
+                    env_var="CB_NAME",
+                    required=True,
+                    help="The name this bot will respond to in chats.")
+args = parser.parse_args()
+
+token = args.token
+brain = Markov(args.brain)
+name = args.name
+
 client = discord.Client()
 
 
@@ -33,7 +54,7 @@ async def on_message(message):
     if message.author == client.user:
         return
     msg_tokens = sanitize_and_tokenize(message.content)
-    if "CODEBRO" in msg_tokens:
+    if name.upper() in msg_tokens:
         if "GETGET10" in msg_tokens:
             response = getTen()
         else:
