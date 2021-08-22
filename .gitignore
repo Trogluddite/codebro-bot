@@ -1,0 +1,15 @@
+.DS_Store
+
+*.pyc
+*.pyo
+dist
+*.egg
+*.egg-info
+
+venv
+
+.idea
+
+auth.txt
+codebro.txt
+codebro.yaml
