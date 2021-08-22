@@ -20,10 +20,14 @@ parser.add_argument('-n', '--name',
                     env_var="CB_NAME",
                     required=True,
                     help="The name this bot will respond to in chats.")
+parser.add_argument('--skip_mp',
+                    env_var="CB_SKIP_MP",
+                    action="store_true",
+                    help="Skip the multiprocess stuff that can hinder debugging.")
 args = parser.parse_args()
 
 token = args.token
-brain = Markov(args.brain)
+brain = Markov(args.brain, args.skip_mp)
 name = args.name
 
 client = discord.Client()

@@ -9,10 +9,15 @@ IGNORE_WORDS = ["CODEBRO", u"CODEBRO"]
 
 # instantiate a Markov object with the source file
 class Markov():
-    def __init__(self, source_file: str):
-        self.manager = Manager()
-        self.words = self.manager.list(self.load_corpus(source_file))
-        self.cache = self.manager.dict(self.database(self.words, {}))
+    def __init__(self, source_file: str, skip_mp=False):
+        self.skip_mp = skip_mp
+        if not self.skip_mp:
+            self.manager = Manager()
+            self.words = self.manager.list(self.load_corpus(source_file))
+            self.cache = self.manager.dict(self.database(self.words, {}))
+        else:
+            self.words = list(self.load_corpus(source_file))
+            self.cache = dict(self.database(self.words, {}))
 
     def load_corpus(self, source_file: str):
         with open(source_file, 'r') as infile:
@@ -72,13 +77,17 @@ class Markov():
 
         self.words += tokens
         self.cache = self.database(self.words, {})
-        lk = Lock()
+        lk = None
+        if not self.skip_mp:
+            lk = Lock()
         # there must be a better way to serialize from the proxy ..
         local_words = [word for word in self.words]
         with open('codebro.yaml', 'w') as outfile:
-            lk.acquire()
+            if not self.skip_mp:
+                lk.acquire()
             outfile.write(yaml.dump(local_words, default_flow_style=True))
-            lk.release()
+            if not self.skip_mp:
+                lk.release()
 
     def create_response(self, prompt="", learn=False):
         prompt_tokens = prompt.split()
@@ -111,6 +120,9 @@ class Markov():
             response = self.generate_markov_text(self.words, self.cache)
 
         if learn:
-            p = Process(target=self.learn, args=(prompt,))
-            p.start()
+            if not self.skip_mp:
+                p = Process(target=self.learn, args=(prompt,))
+                p.start()
+            else:
+                self.learn(prompt)
         return response
