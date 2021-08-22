@@ -1,4 +1,5 @@
 #!/usr/bin/env python
+import asyncio
 
 import configargparse
 import discord
@@ -66,4 +67,8 @@ async def on_message(message):
         await message.channel.send(response)
 
 
-client.run(token)
+tasks = [client.start(token)]
+tasks_group = asyncio.gather(*tasks, return_exceptions=True)
+
+basic_loop = asyncio.get_event_loop()
+basic_loop.run_until_complete(tasks_group)
