@@ -14,11 +14,9 @@ parser.add_argument('-c', '--config',
                     help='Path to config file in yaml format')
 parser.add_argument('-d', '--discord_token',
                     env_var="CB_DISCORD_TOKEN",
-                    required=True,
                     help="This bot's discord bot token.")
 parser.add_argument('-s', '--slack_token',
                     env_var="CB_SLACK_TOKEN",
-                    required=True,
                     help="This bot's slack bot token.")
 parser.add_argument('-b', '--brain',
                     env_var="CB_BRAIN",
@@ -36,6 +34,7 @@ args = parser.parse_args()
 
 discord_token = args.discord_token
 slack_token = args.slack_token
+
 bot_name = args.name
 brain = Markov(args.brain, bot_name.upper(), args.skip_mp)
 
