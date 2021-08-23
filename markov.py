@@ -3,27 +3,28 @@ import random
 from secrets import SystemRandom
 from multiprocess import Lock, Manager, Process
 
-BACKUP_FILE = "codebro.yaml"
-IGNORE_WORDS = ["CODEBRO", u"CODEBRO"]
-
 
 # instantiate a Markov object with the source file
-class Markov():
-    def __init__(self, source_file: str, skip_mp=False):
+class Markov:
+    def __init__(self, brain_file: str, ignore_words, skip_mp=False):
+        self.brain_file = brain_file
+        self.ignore_words = ignore_words
         self.skip_mp = skip_mp
         if not self.skip_mp:
             self.manager = Manager()
-            self.words = self.manager.list(self.load_corpus(source_file))
+            self.words = self.manager.list(self.load_corpus(brain_file))
             self.cache = self.manager.dict(self.database(self.words, {}))
         else:
-            self.words = list(self.load_corpus(source_file))
+            self.words = list(self.load_corpus(brain_file))
             self.cache = dict(self.database(self.words, {}))
 
-    def load_corpus(self, source_file: str):
+    @classmethod
+    def load_corpus(cls, source_file: str):
         with open(source_file, 'r') as infile:
             return yaml.load(infile.read(), Loader=yaml.Loader)
 
-    def generate_markov_text(self, words: list, cache: dict, seed_phrase=None):
+    @classmethod
+    def generate_markov_text(cls, words: list, cache: dict, seed_phrase=None):
         w1, w2 = "<START>", ""
         if seed_phrase:
             w1, w2 = seed_phrase[0], seed_phrase[1]
@@ -42,7 +43,8 @@ class Markov():
         message = ' '.join(gen_words)
         return message
 
-    def triples(self, words):
+    @classmethod
+    def triples(cls, words):
         if len(words) < 3:
             return
         for i in range(len(words) - 2):
@@ -62,7 +64,7 @@ class Markov():
         tokens = sentence.split()
 
         # strip, uppercase, and check for inclusion in IGNORE_WORDS list
-        is_ignored = lambda x: x.strip("\'\"!@#$%^&*().,/\\+=<>?:;").upper() in IGNORE_WORDS
+        is_ignored = lambda x: x.strip("\'\"!@#$%^&*().,/\\+=<>?:;").upper() in self.ignore_words
         tokens = [x for x in tokens if not is_ignored(x)]
         if len(tokens) == 0:
             return  # nothing to learn here!
@@ -82,7 +84,7 @@ class Markov():
             lk = Lock()
         # there must be a better way to serialize from the proxy ..
         local_words = [word for word in self.words]
-        with open('codebro.yaml', 'w') as outfile:
+        with open(self.brain_file, 'w') as outfile:
             if not self.skip_mp:
                 lk.acquire()
             outfile.write(yaml.dump(local_words, default_flow_style=True))
