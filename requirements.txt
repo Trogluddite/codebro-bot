@@ -2,4 +2,4 @@ discord.py>=1.7.3
 multiprocess>=0.70.12.2
 PyYAML>=5.4.1
 ConfigArgParse~=1.5
-aiohttp~=3.7
+slack-sdk~=3.9

@@ -1,12 +1,20 @@
 #!/usr/bin/env python
+
 import asyncio
 import json
+import logging
 
-import aiohttp
 import configargparse
 import discord
 
+from slack_sdk.web.async_client import AsyncWebClient
+from slack_sdk.socket_mode.aiohttp import SocketModeClient
+from slack_sdk.socket_mode.response import SocketModeResponse
+from slack_sdk.socket_mode.request import SocketModeRequest
+
 from markov import Markov
+
+logging.basicConfig(level=logging.INFO)
 
 parser = configargparse.ArgParser(description='CodeBro: A triumph of machine over man.')
 parser.add_argument('-c', '--config',
@@ -15,9 +23,12 @@ parser.add_argument('-c', '--config',
 parser.add_argument('-d', '--discord_token',
                     env_var="CB_DISCORD_TOKEN",
                     help="This bot's discord bot token.")
-parser.add_argument('-s', '--slack_token',
-                    env_var="CB_SLACK_TOKEN",
+parser.add_argument('--slack_bot_token',
+                    env_var="CB_SLACK_BOT_TOKEN",
                     help="This bot's slack bot token.")
+parser.add_argument('--slack_app_token',
+                    env_var="CB_SLACK_APP_TOKEN",
+                    help="This bot's slack app token.")
 parser.add_argument('-b', '--brain',
                     env_var="CB_BRAIN",
                     required=True,
@@ -33,7 +44,8 @@ parser.add_argument('--skip_mp',
 args = parser.parse_args()
 
 discord_token = args.discord_token
-slack_token = args.slack_token
+slack_bot_token = args.slack_bot_token
+slack_app_token = args.slack_app_token
 
 bot_name = args.name
 brain = Markov(args.brain, bot_name.upper(), args.skip_mp)
@@ -74,51 +86,36 @@ def create_raw_response(incoming_message):
 async def on_message(message):
     if message.author == discord_client.user:
         return
+        # print(f"Discord message from {message.author}: {message.content}")
     response = create_raw_response(message.content)
-    await message.channel.send(response)
+    if response and response.strip() != "":
+        await message.channel.send(response)
 
 
-async def slack_api_call(token, method, data=None):
-    async with aiohttp.ClientSession() as session:
-        form = aiohttp.FormData(data or {})
-        form.add_field('token', token)
-        async with session.post('https://slack.com/api/{0}'.format(method), data=form) as response:
-            assert 200 == response.status, ('{0} with {1} failed.'.format(method, data))
-            return await response.json()
+async def process(client: SocketModeClient, req: SocketModeRequest):
+    if req.type == "events_api":
+        # Apparently we want to acknowledge whatever this is
+        some_ack_response = SocketModeResponse(envelope_id=req.envelope_id)
+        await client.send_socket_mode_response(some_ack_response)
 
+        if req.payload["event"]["type"] == "message" \
+            and req.payload["event"].get('subtype') is None:
 
-async def slack_converse(token):
-    rtm = await slack_api_call(token, "rtm.start")
-    assert rtm['ok'], f"Error starting Slack RTM: {rtm}."
+            response = create_raw_response(req.payload["event"]["text"])
+            if response and response.strip() != "":
+                await client.web_client.chat_postMessage(
+                    channel=req.payload["event"]["channel"],
+                    text=response
+                )
 
-    async with aiohttp.ClientSession() as session:
-        async with session.ws_connect(rtm["url"]) as ws:
-            async for msg in ws:
+slack_client = SocketModeClient(
+    app_token=slack_app_token,
+    web_client=AsyncWebClient(token=slack_bot_token)
+)
 
-                msg_obj = json.loads(msg.data)
+slack_client.socket_mode_request_listeners.append(process)
 
-                print("==========")
-                print(msg_obj)
-                if 'type' in msg_obj and msg_obj['type'] == 'message':
-                    print(f"Received a message on channel {msg_obj['channel']} from user {msg_obj['user']} containing \"{msg_obj['text']}\".")
-                    # await ws.send_str('{"type":"message", "channel":"D02BW1P4L7P", "text":"Ok, thanks much."}')
-
-                    # assert msg.tp == aiohttp.MsgType.text
-                    msg_channel = msg_obj['channel']
-                    msg_text = msg_obj['text']
-
-                    response = create_raw_response(msg_text)
-                    slack_response = {
-                        "type":"message",
-                        "channel":msg_channel,
-                        "text":response
-                    }
-                    await ws.send_str(json.dumps(slack_response))
-
-tasks = [
-    discord_client.start(discord_token),
-    slack_converse(slack_token)
-]
-tasks_group = asyncio.gather(*tasks, return_exceptions=True)
 basic_loop = asyncio.get_event_loop()
-basic_loop.run_until_complete(tasks_group)
+basic_loop.create_task(slack_client.connect())
+basic_loop.create_task(discord_client.start(discord_token)),
+basic_loop.run_forever()
