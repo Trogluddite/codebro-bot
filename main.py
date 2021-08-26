@@ -29,6 +29,9 @@ parser.add_argument('--slack_bot_token',
 parser.add_argument('--slack_app_token',
                     env_var="CB_SLACK_APP_TOKEN",
                     help="This bot's slack app token.")
+parser.add_argument('--local_server_port',
+                    type=int,
+                    help='Set a local listen port to enable a local server')
 parser.add_argument('-b', '--brain',
                     env_var="CB_BRAIN",
                     required=True,
@@ -52,7 +55,6 @@ brain = Markov(args.brain, args.output, [bot_name])
 
 discord_client = discord.Client()
 
-
 def sanitize_and_tokenize(msg: str) -> list:
     msg_tokens = msg.split()
     for i in range(0, len(msg_tokens)):
@@ -75,6 +77,7 @@ async def on_ready():
 
 def create_raw_response(incoming_message):
     msg_tokens = sanitize_and_tokenize(incoming_message)
+    print(msg_tokens)
     if (bot_name.upper() in msg_tokens) or "TOWN" in msg_tokens:  #it's not _not_ a bug
         if "GETGET10" in msg_tokens:
             return get_ten()
@@ -112,10 +115,36 @@ slack_client = SocketModeClient(
     app_token=slack_app_token,
     web_client=AsyncWebClient(token=slack_bot_token)
 )
-
 slack_client.socket_mode_request_listeners.append(process)
+
+# listen on a local server, if a port is specified 
+# try connecting with netcat or something, like 
+# nc localhost <your port> 
+if args.local_server_port:
+    import socket
+    HOST = 'localhost'
+    PORT = args.local_server_port
+    PROMPT="\nFeed Me: "
+    print("Listening on port: " + str(PORT))
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+        s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+        s.bind((HOST, PORT))
+        s.listen(1)
+        conn, addr = s.accept()
+        with conn:
+            print('Connected by', addr)
+            while True:
+                conn.sendall(str.encode(PROMPT))
+                data = conn.recv(1024)
+                if not data: break
+                decoded_data = data.decode('utf-8')
+                response = create_raw_response(decoded_data)
+                if response:
+                    conn.sendall(str.encode(response))
 
 basic_loop = asyncio.get_event_loop()
 basic_loop.create_task(slack_client.connect())
 basic_loop.create_task(discord_client.start(discord_token)),
 basic_loop.run_forever()
+
+
