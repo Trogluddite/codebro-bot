@@ -77,7 +77,6 @@ async def on_ready():
 
 def create_raw_response(incoming_message):
     msg_tokens = sanitize_and_tokenize(incoming_message)
-    print(msg_tokens)
     if (bot_name.upper() in msg_tokens) or "TOWN" in msg_tokens:  #it's not _not_ a bug
         if "GETGET10" in msg_tokens:
             return get_ten()
