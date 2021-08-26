@@ -161,10 +161,10 @@ slack_client.socket_mode_request_listeners.append(process)
 
 
 # MAIN ---- 
+basic_loop = asyncio.get_event_loop()
 try:
     if args.local_server_port:
         run_local_server(port_num=args.local_server_port)
-    basic_loop = asyncio.get_event_loop()
     basic_loop.create_task(slack_client.connect())
     basic_loop.create_task(discord_client.start(discord_token)),
     basic_loop.run_forever()
