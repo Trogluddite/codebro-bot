@@ -133,24 +133,26 @@ async def process(client: SocketModeClient, req: SocketModeRequest):
 # this will listen on a local server, if a port is specified.
 # try connecting with netcat or something, like nc localhost <your port> 
 def run_local_server(port_num):
-HOST = 'localhost'
-PORT = args.local_server_port
-PROMPT="\nFeed Me: "
-print("Listening on port: " + str(PORT))
-with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
-    s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-    s.bind((HOST, PORT))
-    s.listen(1)
-    conn, addr = s.accept()
-    with conn:
-        print('Connected by', addr)
-        while True:
-            conn.sendall(str.encode(PROMPT))
-            data = conn.recv(1024)
-            if not data: break
-            decoded_data = data.decode('utf-8')
-            response = create_raw_response(decoded_data)
-            if response: conn.sendall(str.encode(response))
+    HOST = 'localhost'
+    PORT = args.local_server_port
+    PROMPT="\nFeed Me: "
+    print("Listening on port: " + str(PORT))
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+        s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+        s.bind((HOST, PORT))
+        s.listen(1)
+        conn, addr = s.accept()
+        with conn:
+            print('Connected by', addr)
+            while True:
+                conn.sendall(str.encode(PROMPT))
+                data = conn.recv(1024)
+                if not data: break
+                decoded_data = data.decode('utf-8')
+                response = create_raw_response(decoded_data)
+                if response: conn.sendall(str.encode(response))
+
+
 slack_client = SocketModeClient(
     app_token=slack_app_token,
     web_client=AsyncWebClient(token=slack_bot_token)
