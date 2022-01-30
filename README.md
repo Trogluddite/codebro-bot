@@ -31,6 +31,7 @@ Find "Event Subscriptions" in the left-hand Features menu. Enable event subscrip
     - message:im
     - message:groups
     - message:channels
+    - message:mpim
 
 Save your changes. You should see a prompt to reinstall your app. Go ahead and reinstall.
 
