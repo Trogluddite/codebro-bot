@@ -8,12 +8,13 @@ STOP_TOK = "<STOP>"
 STOP = object()
 START = object()
 
+
 # instantiate a Markov object with the source file
 class Markov:
-    def __init__(self, input_file: str, output_file: str, ignore_words):
+    def __init__(self, input_file: str, output_file: str, user_map, ignore_words):
         if input_file == output_file:
             raise ValueError("input and output files must be different")
-
+        self.user_map = self._init_user_map(user_map)
         self.ignore_words = set(w.upper() for w in ignore_words)
         self.output_file = output_file
         self.update_graph_and_corpus(self.corpus_iter(input_file), init=True)
@@ -32,7 +33,6 @@ class Markov:
             else:
                 for line in infile:
                     yield from self.tokenize(line)
-
 
     @classmethod
     def triples_and_stop(cls, words):
@@ -112,6 +112,12 @@ class Markov:
             if learned:
                 yield seq
 
+    def _init_user_map(self, mapfile):
+        if mapfile:
+            with open(mapfile, 'r') as infile:
+                mapfile = yaml.load(infile.read(), Loader=yaml.Loader)
+        return mapfile
+
     def update_graph_and_corpus(self, token_seqs, init=False):
         changes = self._update_graph_and_emit_changes(token_seqs, init=init)
         self.update_corpus(changes, init=init)
@@ -140,7 +146,19 @@ class Markov:
         message = ' '.join(gen_words)
         return message
 
-    def create_response(self, prompt="", learn=False):
+    def _map_users(self, response, slack):
+        if self.user_map is None:
+            return response
+        elif slack:
+            for k, v in self.user_map.items():
+                response.replace('@!', '@')  # discord allows exclamation points after the @ in their user ids??
+                response = response.replace(v, k)
+        else:
+            for k, v in self.user_map.items():
+                response = response.replace(k, v)
+        return response
+
+    def create_response(self, prompt="", learn=False, slack=False):
         # set seedword from somewhere in words if there's no prompt
         prompt_tokens = prompt.split()
         valid_seeds = [tok for tok in prompt_tokens[:-2] if tok in self.graph]
@@ -148,4 +166,4 @@ class Markov:
         response = self.generate_markov_text(seed_word)
         if learn:
             self.update_graph_and_corpus(self.tokenize(prompt))
-        return response
+        return self._map_users(response, slack)

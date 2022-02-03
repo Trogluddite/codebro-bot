@@ -70,14 +70,21 @@ parser.add_argument(
     action="store_true",
     help="Backup the brain and copy the output to the brain on SIGTERM",
 )
+parser.add_argument(
+   "-u",
+   "--user_map",
+   env_var="USER_MAP",
+   required=False,
+   help="Discord-to-Slack user id map",
+)
 args = parser.parse_args()
 
 discord_token = args.discord_token
 slack_bot_token = args.slack_bot_token
 slack_app_token = args.slack_app_token
-
+user_map = args.user_map
 bot_name = args.name
-brain = Markov(args.brain, args.output, [bot_name])
+brain = Markov(args.brain, args.output, args.user_map, [bot_name])
 
 discord_client = discord.Client()
 
@@ -95,10 +102,10 @@ def sanitize_and_tokenize(msg: str) -> list:
     return msg_tokens
 
 
-def get_ten() -> str:
+def get_ten(is_slack) -> str:
     response = ""
     for i in range(0, 9):
-        response += brain.create_response()
+        response += brain.create_response(slack=is_slack)
         response += "\n"
     return response
 
@@ -108,13 +115,13 @@ async def on_ready():
     print("Logged in as {0.user}".format(discord_client))
 
 
-def create_raw_response(incoming_message):
+def create_raw_response(incoming_message, is_slack):
     msg_tokens = sanitize_and_tokenize(incoming_message)
     if (bot_name.upper() in msg_tokens) or "TOWN" in msg_tokens:  # it's not _not_ a bug
         if "GETGET10" in msg_tokens:
-            return get_ten()
+            return get_ten(is_slack)
         else:
-            return brain.create_response(incoming_message, True)
+            return brain.create_response(incoming_message, learn=True, slack=is_slack)
 
 
 @discord_client.event
@@ -122,7 +129,7 @@ async def on_message(message):
     if message.author == discord_client.user:
         return
         # print(f"Discord message from {message.author}: {message.content}")
-    response = create_raw_response(message.content)
+    response = create_raw_response(message.content, False)
     if response and response.strip() != "":
         await message.channel.send(response)
 
@@ -132,7 +139,7 @@ app = AsyncApp(token=slack_bot_token)
 
 @app.event("message")
 async def handle_slack_message(payload):
-    response = create_raw_response(payload["text"])
+    response = create_raw_response(payload["text"], True)
     if response and response.strip() != "":
         await app.client.chat_postMessage(channel=payload["channel"], text=response)
 
