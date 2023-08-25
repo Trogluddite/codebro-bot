@@ -86,8 +86,8 @@ user_map = args.user_map
 bot_name = args.name
 brain = Markov(args.brain, args.output, args.user_map, [bot_name])
 
-discord_client = discord.Client()
-
+intents = discord.Intents(guild_messages=True, message_content=True)
+discord_client = discord.Client(intents=intents)
 
 def rotate_brain(the_brain: str, output: str):
     brain_backup = "{}.{}".format(the_brain, time())
