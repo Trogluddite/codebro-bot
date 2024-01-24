@@ -14,6 +14,8 @@ def file_to_words(garbage_in: str, garbage_out: str):
     words = []
     for line in lines:
         tokens = line.split()
+        if len(tokens) == 0:
+            continue
         tokens[len(tokens) - 1] = tokens[len(tokens) - 1].strip(".?!")
         tokens = ["<START>"] + tokens + ["<STOP>"]
         indexes_with_stops = [tokens.index(x) for x in tokens if x.strip(".?!") != x]

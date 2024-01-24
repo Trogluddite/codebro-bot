@@ -86,9 +86,6 @@ user_map = args.user_map
 bot_name = args.name
 brain = Markov(args.brain, args.output, args.user_map, [bot_name])
 
-discord_client = discord.Client()
-
-
 def rotate_brain(the_brain: str, output: str):
     brain_backup = "{}.{}".format(the_brain, time())
     shutil.move(the_brain, brain_backup)
@@ -101,7 +98,6 @@ def sanitize_and_tokenize(msg: str) -> list:
         msg_tokens[i] = msg_tokens[i].strip("'\"!@#$%^&*().,/\\+=<>?:;").upper()
     return msg_tokens
 
-
 def get_ten(is_slack) -> str:
     response = ""
     for i in range(0, 9):
@@ -109,10 +105,42 @@ def get_ten(is_slack) -> str:
         response += "\n"
     return response
 
+#**********************< SLACK & DISCORD STUFF>**************************#
+if discord_token:
+    discord_client = discord.Client()
+else:
+    discord_client = None
 
-@discord_client.event
-async def on_ready():
-    print("Logged in as {0.user}".format(discord_client))
+if discord_client:
+    @discord_client.event
+    async def on_ready():
+        print("Logged in as {0.user}".format(discord_client))
+
+    @discord_client.event
+    async def on_message(message):
+        if message.author == discord_client.user:
+            return
+            # print(f"Discord message from {message.author}: {message.content}")
+        response = create_raw_response(message.content, False)
+        if response and response.strip() != "":
+            await message.channel.send(response)
+
+if slack_bot_token:
+    app = AsyncApp(token=slack_bot_token)
+else:
+    app = None
+if app:
+    @app.event("message")
+    async def handle_slack_message(payload):
+        response = create_raw_response(payload["text"], True)
+        if response and response.strip() != "":
+            await app.client.chat_postMessage(channel=payload["channel"], text=response)
+
+    slack_socket_client = AsyncSocketModeHandler(app, slack_app_token)
+
+    async def run_slack_app():
+        await slack_socket_client.connect_async()
+#**********************</SLACK & DISCORD STUFF>**************************#
 
 
 def create_raw_response(incoming_message, is_slack):
@@ -122,27 +150,6 @@ def create_raw_response(incoming_message, is_slack):
             return get_ten(is_slack)
         else:
             return brain.create_response(incoming_message, learn=True, slack=is_slack)
-
-
-@discord_client.event
-async def on_message(message):
-    if message.author == discord_client.user:
-        return
-        # print(f"Discord message from {message.author}: {message.content}")
-    response = create_raw_response(message.content, False)
-    if response and response.strip() != "":
-        await message.channel.send(response)
-
-
-app = AsyncApp(token=slack_bot_token)
-
-
-@app.event("message")
-async def handle_slack_message(payload):
-    response = create_raw_response(payload["text"], True)
-    if response and response.strip() != "":
-        await app.client.chat_postMessage(channel=payload["channel"], text=response)
-
 
 # TODO: the local server should probably be a class and should probably be
 # multi-threaded to handle simultaneous connections ... but this is expedient
@@ -168,25 +175,19 @@ def run_local_server(port_num):
                 if not data:
                     break
                 decoded_data = data.decode("utf-8")
-                response = create_raw_response(decoded_data)
+                response = create_raw_response(decoded_data, False)
                 if response:
                     conn.sendall(str.encode(response))
-
-
-slack_socket_client = AsyncSocketModeHandler(app, slack_app_token)
-
-
-async def run_slack_app():
-    await slack_socket_client.connect_async()
-
 
 # MAIN ----
 basic_loop = asyncio.get_event_loop()
 try:
     if args.local_server_port:
         run_local_server(port_num=args.local_server_port)
-    basic_loop.create_task(run_slack_app())
-    basic_loop.create_task(discord_client.start(discord_token)),
+    if app:
+        basic_loop.create_task(run_slack_app())
+    if discord_client:
+        basic_loop.create_task(discord_client.start(discord_token)),
     basic_loop.run_forever()
 except KeyboardInterrupt:
     if args.rotate:
