@@ -160,7 +160,7 @@ def create_raw_response(incoming_message, is_slack):
 def run_local_server(port_num):
     host = "localhost"
     port = port_num
-    prompt = "\nFeed Me: "
+    prompt = "\nSay something: "
     print("Listening on port: " + str(port))
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
         s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
@@ -168,7 +168,7 @@ def run_local_server(port_num):
         s.listen(1)
         conn, addr = s.accept()
         with conn:
-            print("Connected by", addr)
+            print("Connection recieved from", addr)
             while True:
                 conn.sendall(str.encode(prompt))
                 data = conn.recv(1024)
@@ -177,6 +177,7 @@ def run_local_server(port_num):
                 decoded_data = data.decode("utf-8")
                 response = create_raw_response(decoded_data, False)
                 if response:
+                    response = bot_name + " " + "said: " + response
                     conn.sendall(str.encode(response))
 
 # MAIN ----
