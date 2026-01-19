@@ -1,5 +1,5 @@
 aiohttp~=3.7.4.post0
-discord.py>=1.7.3,<2.0
+discord.py>=2.6.4,<2.7
 multiprocess>=0.70.12.2
 PyYAML>=5.4.1
 ConfigArgParse~=1.5

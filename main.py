@@ -87,7 +87,7 @@ bot_name = args.name
 brain = Markov(args.brain, args.output, args.user_map, [bot_name])
 
 intents = discord.Intents(guild_messages=True, message_content=True)
-discord_client = discord.Client(intents=intents)
+discord_client:discord.Client = None
 
 def rotate_brain(the_brain: str, output: str):
     brain_backup = "{}.{}".format(the_brain, time())
@@ -110,7 +110,7 @@ def get_ten(is_slack) -> str:
 
 #**********************< SLACK & DISCORD STUFF>**************************#
 if discord_token:
-    discord_client = discord.Client()
+    discord_client = discord.Client(intents=intents)
 else:
     discord_client = None
 

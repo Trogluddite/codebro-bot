@@ -23,7 +23,7 @@ class Markov:
         """
         Emit the contents of the source_file as an iterable of token sequences
         """
-        with open(source_file, 'r') as infile:
+        with open(source_file, 'r', encoding='utf8') as infile:
             # this is dumb
             if source_file.endswith(".yml") or source_file.endswith(".yaml"):
                 words = yaml.load(infile.read(), Loader=yaml.Loader)
@@ -114,7 +114,7 @@ class Markov:
 
     def _init_user_map(self, mapfile):
         if mapfile:
-            with open(mapfile, 'r') as infile:
+            with open(mapfile, 'r', encoding='utf8') as infile:
                 mapfile = yaml.load(infile.read(), Loader=yaml.Loader)
         return mapfile
 
@@ -124,7 +124,7 @@ class Markov:
 
     def update_corpus(self, token_seqs, init=False):
         mode = 'w' if init else 'a'
-        with open(self.output_file, mode) as f:
+        with open(self.output_file, mode, encoding='utf8') as f:
             for seq in token_seqs:
                 f.write(" ".join(seq))
                 f.write("\n")
