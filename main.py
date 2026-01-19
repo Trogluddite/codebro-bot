@@ -11,6 +11,7 @@ from typing import Dict, List, Tuple, Optional
 import configargparse
 import discord
 from discord import app_commands
+from discord.ext import commands
 
 from slack_bolt.adapter.socket_mode.aiohttp import AsyncSocketModeHandler
 from slack_bolt.async_app import AsyncApp
@@ -98,7 +99,7 @@ parser.add_argument(
     "--guild_id",
     env_var="GUILD_ID",
     type=int,
-    required=False,
+    required=True,
     help="Guild ID to register commands to",
 )
 
@@ -152,7 +153,7 @@ def get_ten(is_slack) -> str:
 
 #**********************< SLACK & DISCORD STUFF>**************************#
 if discord_token:
-    discord_client = discord.Client(intents=intents)
+    discord_client = commands.Bot(command_prefix='?', intents=intents)
     tree = discord_client.tree
 else:
     discord_client = None
