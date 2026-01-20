@@ -1,6 +1,50 @@
 # codebro-bot
 a toy markov-bot project; behold: stream-of-consciousness python
 
+# Run a local server
+This is useful for testing the basic functionality and interacting with the bot, without connecting to Slack or Discord.
+
+## Start up:
+Run `main.py`, with args to specify the input file ('brain'), output file (a log of recorded messages), the bot's name, and a local port.
+For example:
+```
+./main.py --local_server_port 9966 --brain blah.yaml --output meh.brain --name dumdum
+```
+
+For blank-slate testing, you need to create a seed brain with at least two tokens
+```.
+[<START>, hi, hello, <STOP>]
+```
+
+## Connecting & interacting
+Once the server is running, you can background the process or open up another terminal, and connect to the port you opened with `nc`.
+
+The Bot will respond when whatever name you've given it is called, in the same manner as a connection to Slack or Discord, and should start learning from your conversation:
+```
+> nc localhost 9966
+
+Say something: hello dumdum
+dumdum said: hi hello
+Say something: dumdum, learn some things
+dumdum said: hi hello
+Say something: yes dumdum we covered that
+dumdum said: hi hello
+Say something: try something new dumdum
+dumdum said: learn some things
+```
+
+## persistence & logging
+Everything the bot learns will be appended to the file you specified in `--output`
+
+The input file needs to have some basic pickling; a convenience script, `make_yaml.py`, will convert any file of phrases into a new consumable brain for the bot.
+
+This example takes the --output specified in the above example, and prepares it for a new instance of the bot:
+```
+ ./make_yaml.py --garbage-in meh.brain --garbage-out blah.yaml
+```
+
+You can tail the output file to see what the bot is learning in real-time.
+
 # Codebro Resurrect
 
 ### **Create a Slack app**:
