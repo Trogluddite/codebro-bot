@@ -19,7 +19,7 @@ class Markov:
     # Signed short
     COMPRESSED_NUMBER_FORMAT: str = 'i'
     # Two little-endian signed shorts
-    COMPRESSED_COMBO_NUMBER_FORMAT: str = f'>{COMPRESSED_NUMBER_FORMAT}{COMPRESSED_NUMBER_FORMAT}'
+    COMPRESSED_COMBO_NUMBER_FORMAT: str = f'{COMPRESSED_NUMBER_FORMAT}{COMPRESSED_NUMBER_FORMAT}'
     SIGNED_INT_MAX_VALUE: int = 2147483648
 
     def __init__(self, input_file: str, output_file: str, user_map, ignore_words):
@@ -162,7 +162,7 @@ class Markov:
         """
         if init:
             self.graph.clear()
-            self.graph[self.to_graph_key(START_INDEX)] = array.array('h')
+            self.graph[self.to_graph_key(START_INDEX)] = array.array(Markov.COMPRESSED_NUMBER_FORMAT)
 
         for seq in token_seqs:
             first = True
