@@ -197,9 +197,13 @@ if discord_client:
     )
     @app_commands.describe(regex_str='The regex against which each token will be checked (case insensitive)',
                            emoji_str="The emoji string (either a single unicode character or an emoji's name) to react with")
-    @app_commands.checks.has_permissions(moderate_members=True)
     @app_commands.checks.cooldown(3, 20, key=lambda i: (i.guild_id, i.user.id))
     async def add_react(ctx: discord.Interaction, regex_str: str, emoji_str: str):
+
+        if not await get_user_has_role_for_interaction(ctx, 'admin'):
+            await ctx.response.send_message('Missing permissions for this command')
+            return
+
         def is_valid_str_arg(arg: str) -> bool:
             if arg is None or arg == '':
                 return False
@@ -250,9 +254,13 @@ if discord_client:
         guilds=all_guild_objects
     )
     @app_commands.describe(regex_str='The regex against which each token will be checked (case insensitive)')
-    @app_commands.checks.has_permissions(moderate_members=True)
     @app_commands.checks.cooldown(3, 20, key=lambda i: (i.guild_id, i.user.id))
     async def remove_react(ctx:discord.Interaction, regex_str:str):
+
+        if not await get_user_has_role_for_interaction(ctx, 'admin'):
+            await ctx.response.send_message('Missing permissions for this command')
+            return
+
         def is_valid_str_arg(arg:str)->bool:
             if arg is None or arg == '':
                 return False
@@ -276,9 +284,13 @@ if discord_client:
         description="List emoji reactions",
         guilds=all_guild_objects
     )
-    @app_commands.checks.has_permissions(moderate_members=True)
     @app_commands.checks.cooldown(3, 20, key=lambda i: (i.guild_id, i.user.id))
     async def list_react(ctx: discord.Interaction):
+
+        if not await get_user_has_role_for_interaction(ctx, 'admin'):
+            await ctx.response.send_message('Missing permissions for this command')
+            return
+
         reply_content = 'Emoji:\n'
         for emoji_mapping in my_emoji_config.emoji_config_list:
             reply_content += f'{emoji_mapping.regex_str} => {emoji_mapping.emoji_str}\n'
@@ -289,14 +301,48 @@ if discord_client:
         description="Force Sync the bot",
         guilds=all_guild_objects
     )
-    @app_commands.checks.has_permissions(moderate_members=True)
     @app_commands.checks.cooldown(3, 20, key=lambda i: (i.guild_id, i.user.id))
     async def force_sync(ctx: discord.Interaction):
+
+        if not await get_user_has_role_for_interaction(ctx, 'admin'):
+            await ctx.response.send_message('Missing permissions for this command')
+            return
+
         await ctx.response.defer()
         print(f'Starting sync for guild {ctx.guild.id}...')
         await tree.sync(guild=ctx.guild)
         print(f'Synced for guild {ctx.guild.id}')
         await ctx.followup.send('Forcibly synced')
+
+
+    async def get_user_has_role_for_interaction(ctx: discord.Interaction, role_name: str) -> bool:
+        """For some reason I couldn't get app_commands.checks.has_role working. Something is missing in the discordpy
+        cache. Since we're using this for really low frequency operations, I just refetch everything here to do
+        checks solidly."""
+        guild = await discord_client.fetch_guild(ctx.guild_id)
+
+        if guild is None:
+            return False
+
+        user: discord.Member = await guild.fetch_member(ctx.user.id)
+
+        if user is None:
+            return False
+
+        guild_roles = await guild.fetch_roles()
+
+        found_role = None
+        for r in guild_roles:
+            if r.name.lower() == role_name.lower():
+                found_role = r
+                break
+
+        if found_role is None:
+            return False
+
+        # For some reason, ctx.user.get_role doesn't work here because ctx.guild has an empty roles dictionary?
+        user_role = user.get_role(found_role.id)
+        return user_role is not None
 
     async def try_append_emoji_to_message(message:discord.Message):
         msg_tokens = sanitize_and_tokenize(message.content)
