@@ -129,7 +129,10 @@ all_guild_objects:List[discord.Object] = [discord.Object(id=i) for i in ([main_g
 brain = Markov(args.brain, args.output, args.user_map, [bot_name])
 
 intents = discord.Intents(guild_messages=True, message_content=True)
-discord_client: discord.Client = None
+<<<<<<< HEAD
+=======
+discord_client:discord.Client = None
+>>>>>>> origin/master
 
 def rotate_brain(the_brain: str, output: str):
     brain_backup = "{}.{}".format(the_brain, time())
@@ -154,18 +157,27 @@ def get_ten(is_slack) -> str:
 
 #**********************< SLACK & DISCORD STUFF>**************************#
 if discord_token:
+<<<<<<< HEAD
     discord_client = commands.Bot(command_prefix='?', intents=intents)
     tree = discord_client.tree
+=======
+    discord_client = discord.Client(intents=intents)
+>>>>>>> origin/master
 else:
     discord_client = None
 
 if discord_client:
     @discord_client.event
     async def on_ready():
-        for g in discord_client.guilds:
-            print(f'Starting sync for guild {g.id}...')
-            await tree.sync(guild=g)
-            print(f'Synced for guild {g.id}')
+
+        if not emoji_map_active:
+            print('No emoji map file found. Did you pass in an argument?')
+
+            for g in discord_client.guilds:
+                print(f'Starting sync for guild {g.id}...')
+                await tree.sync(guild=g)
+                print(f'Synced for guild {g.id}')
+                pass
 
         print("Logged in as {0.user}".format(discord_client))
 
