@@ -13,3 +13,5 @@ venv
 auth.txt
 codebro.txt
 codebro.yaml
+config
+braindata/*

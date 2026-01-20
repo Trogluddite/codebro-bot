@@ -1,0 +1,10 @@
+services:
+  codebro:
+    build: . 
+    container_name: codebro 
+    volumes:
+      - ./braindata:/app/braindata
+      - ./config:/app/config
+    restart: unless-stopped
+volumes:
+  codebro:
