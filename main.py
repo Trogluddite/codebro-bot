@@ -84,6 +84,7 @@ slack_bot_token = args.slack_bot_token
 slack_app_token = args.slack_app_token
 user_map = args.user_map
 bot_name = args.name
+
 brain = Markov(args.brain, args.output, args.user_map, [bot_name])
 
 intents = discord.Intents(guild_messages=True, message_content=True)
@@ -123,6 +124,12 @@ if discord_client:
     async def on_message(message):
         if message.author == discord_client.user:
             return
+
+        num_words_in_brain = len(brain.words)
+        if num_words_in_brain >= (Markov.SIGNED_INT_MAX_VALUE * 0.95):
+            await message.channel.send('Brain hurty. Brain almost full :sob:')
+            return
+
             # print(f"Discord message from {message.author}: {message.content}")
         response = create_raw_response(message.content, False)
         if response and response.strip() != "":
