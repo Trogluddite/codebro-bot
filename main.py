@@ -4,7 +4,6 @@ import asyncio
 import logging
 import shutil
 import socket
-import tracemalloc
 
 import configargparse
 import discord
@@ -86,13 +85,7 @@ slack_app_token = args.slack_app_token
 user_map = args.user_map
 bot_name = args.name
 
-tracemalloc.start()
-
 brain = Markov(args.brain, args.output, args.user_map, [bot_name])
-snapshot = tracemalloc.take_snapshot()
-
-snapshot.dump('mem_snapshot_new.dmp')
-tracemalloc.stop()
 
 intents = discord.Intents(guild_messages=True, message_content=True)
 discord_client:discord.Client = None
