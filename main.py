@@ -2,15 +2,23 @@
 
 import asyncio
 import logging
+import os.path
+import re
 import shutil
 import socket
+from typing import Dict, List, Tuple, Optional
 
 import configargparse
 import discord
+from discord import app_commands
+from discord.ext import commands
 
 from slack_bolt.adapter.socket_mode.aiohttp import AsyncSocketModeHandler
 from slack_bolt.async_app import AsyncApp
 
+import emoji_config
+from custom_emoji_cache import CustomEmojiCache
+from emoji_config import EmojiMapping
 from markov import Markov
 from time import time
 
@@ -77,6 +85,32 @@ parser.add_argument(
    required=False,
    help="Discord-to-Slack user id map",
 )
+
+parser.add_argument(
+   "-e",
+   "--emoji_map_file",
+   env_var="EMOJI_MAP",
+   required=False,
+   help="Yaml file of mappings of words which will result in an emoji react",
+)
+
+parser.add_argument(
+    "-g",
+    "--guild_id",
+    env_var="GUILD_ID",
+    type=int,
+    required=True,
+    help="Guild ID to register commands to",
+)
+
+parser.add_argument(
+    "--extra_guild_ids",
+    type=int,
+    nargs='+',
+    required=False,
+    help="Extra Guild IDs to register commands to",
+)
+
 args = parser.parse_args()
 
 discord_token = args.discord_token
@@ -84,22 +118,32 @@ slack_bot_token = args.slack_bot_token
 slack_app_token = args.slack_app_token
 user_map = args.user_map
 bot_name = args.name
+
+emoji_map_file = args.emoji_map_file
+emoji_map_active = emoji_map_file is not None and emoji_map_file != ''
+
+main_guild_id:int = args.guild_id
+extra_guild_ids:List[int] = args.extra_guild_ids if args.extra_guild_ids is not None else list()
+all_guild_objects:List[discord.Object] = [discord.Object(id=i) for i in ([main_guild_id] + extra_guild_ids)]
+
 brain = Markov(args.brain, args.output, args.user_map, [bot_name])
 
 intents = discord.Intents(guild_messages=True, message_content=True)
-discord_client:discord.Client = None
+discord_client: discord.Client = None
 
 def rotate_brain(the_brain: str, output: str):
     brain_backup = "{}.{}".format(the_brain, time())
     shutil.move(the_brain, brain_backup)
     shutil.move(output, the_brain)
 
-
-def sanitize_and_tokenize(msg: str) -> list:
+def sanitize_and_tokenize(msg: str) -> list[str]:
     msg_tokens = msg.split()
     for i in range(0, len(msg_tokens)):
         msg_tokens[i] = msg_tokens[i].strip("'\"!@#$%^&*().,/\\+=<>?:;").upper()
     return msg_tokens
+
+my_emoji_config: emoji_config.EmojiConfig = emoji_config.read_emoji_config(emoji_map_file)
+custom_emoji_cache: CustomEmojiCache = CustomEmojiCache()
 
 def get_ten(is_slack) -> str:
     response = ""
@@ -110,23 +154,220 @@ def get_ten(is_slack) -> str:
 
 #**********************< SLACK & DISCORD STUFF>**************************#
 if discord_token:
-    discord_client = discord.Client(intents=intents)
+    discord_client = commands.Bot(command_prefix='?', intents=intents)
+    tree = discord_client.tree
 else:
     discord_client = None
 
 if discord_client:
     @discord_client.event
     async def on_ready():
+        for g in discord_client.guilds:
+            print(f'Starting sync for guild {g.id}...')
+            await tree.sync(guild=g)
+            print(f'Synced for guild {g.id}')
+
         print("Logged in as {0.user}".format(discord_client))
 
     @discord_client.event
-    async def on_message(message):
+    async def on_message(message:discord.Message):
         if message.author == discord_client.user:
             return
-            # print(f"Discord message from {message.author}: {message.content}")
-        response = create_raw_response(message.content, False)
+
+        bot_display_names = [discord_client.user.display_name]
+
+        mentioned = False
+        for mention in message.mentions:
+            if mention.id == discord_client.user.id:
+                mentioned = True
+                break
+
+        await try_append_emoji_to_message(message)
+
+        # print(f"Discord message from {message.author}: {message.content}")
+        response = create_raw_response(message.content, False, force_mention=mentioned, other_bot_names=bot_display_names)
         if response and response.strip() != "":
             await message.channel.send(response)
+
+
+    @tree.command(
+        name="add_react",
+        description="Add a reaction emoji config",
+        guilds=all_guild_objects
+    )
+    @app_commands.describe(regex_str='The regex against which each token will be checked (case insensitive)',
+                           emoji_str="The emoji string (either a single unicode character or an emoji's name) to react with")
+    @app_commands.checks.cooldown(3, 20, key=lambda i: (i.guild_id, i.user.id))
+    async def add_react(ctx: discord.Interaction, regex_str: str, emoji_str: str):
+
+        if not await get_user_has_role_for_interaction(ctx, 'admin'):
+            await ctx.response.send_message('Missing permissions for this command')
+            return
+
+        def is_valid_str_arg(arg: str) -> bool:
+            if arg is None or arg == '':
+                return False
+            return True
+
+        if not is_valid_str_arg(regex_str):
+            await ctx.response.send_message(f'Failed to add emoji since regex \"{regex_str}\" is invalid')
+            return
+
+        if not is_valid_str_arg(emoji_str):
+            await ctx.response.send_message(f'Failed to add emoji since emoji \"{emoji_str}\" is invalid')
+            return
+
+        existing_emoji_mapping = my_emoji_config.find_mapping_via_regex_str(regex_str, ctx.guild_id)
+        if existing_emoji_mapping is not None:
+            await ctx.response.send_message(f'Failed to add emoji since regex \"{regex_str}\" already in config')
+            return
+
+        def try_get_regex_pattern(regex_str:str) -> Optional[re.Pattern]:
+            try:
+                pattern = re.compile(regex_str)
+                return pattern
+            except:
+                return None
+
+        new_pattern = try_get_regex_pattern(regex_str)
+        if new_pattern is None:
+            await ctx.response.send_message(f'Failed to add emoji since regex \"{regex_str}\" is invalid')
+            return
+
+        if len(emoji_str) >= 2:
+            custom_emoji = await custom_emoji_cache.find_custom_emoji_with_name(ctx.guild, emoji_str, force_refresh_emoji=True)
+            if custom_emoji is None:
+                msg = f"Failed to add emoji. Couldn't find emoji \"{emoji_str}\""
+                print(msg)
+                await ctx.response.send_message(msg)
+                return
+
+        my_emoji_config.add_mapping(EmojiMapping(regex_str, emoji_str, ctx.guild_id))
+
+        if emoji_map_active:
+            emoji_config.write_emoji_config(emoji_map_file, my_emoji_config)
+        await ctx.response.send_message('Added emoji response')
+
+    @tree.command(
+        name="remove_react",
+        description="Remove a reaction emoji config",
+        guilds=all_guild_objects
+    )
+    @app_commands.describe(regex_str='The regex against which each token will be checked (case insensitive)')
+    @app_commands.checks.cooldown(3, 20, key=lambda i: (i.guild_id, i.user.id))
+    async def remove_react(ctx:discord.Interaction, regex_str:str):
+
+        if not await get_user_has_role_for_interaction(ctx, 'admin'):
+            await ctx.response.send_message('Missing permissions for this command')
+            return
+
+        def is_valid_str_arg(arg:str)->bool:
+            if arg is None or arg == '':
+                return False
+            return True
+
+        if not is_valid_str_arg(regex_str):
+            await ctx.response.send_message(f'Failed to remove emoji since regex \"{regex_str}\" is invalid')
+            return
+
+        removed = my_emoji_config.remove_mappings_for_regex(regex_str, ctx.guild_id)
+        if removed > 0:
+            if emoji_map_active:
+                emoji_config.write_emoji_config(emoji_map_file, my_emoji_config)
+            await ctx.response.send_message(f'Removed emoji react for regex \"{regex_str}\"')
+        else:
+            await ctx.response.send_message(f'Nothing to remove for regex \"{regex_str}\"')
+
+
+    @tree.command(
+        name="list_react",
+        description="List emoji reactions",
+        guilds=all_guild_objects
+    )
+    @app_commands.checks.cooldown(3, 20, key=lambda i: (i.guild_id, i.user.id))
+    async def list_react(ctx: discord.Interaction):
+
+        if not await get_user_has_role_for_interaction(ctx, 'admin'):
+            await ctx.response.send_message('Missing permissions for this command')
+            return
+
+        reply_content = 'Emoji:\n'
+        for emoji_mapping in my_emoji_config.emoji_config_list:
+            reply_content += f'{emoji_mapping.regex_str} => {emoji_mapping.emoji_str}\n'
+        await ctx.response.send_message(reply_content)
+
+    @tree.command(
+        name="force_sync",
+        description="Force Sync the bot",
+        guilds=all_guild_objects
+    )
+    @app_commands.checks.cooldown(3, 20, key=lambda i: (i.guild_id, i.user.id))
+    async def force_sync(ctx: discord.Interaction):
+
+        if not await get_user_has_role_for_interaction(ctx, 'admin'):
+            await ctx.response.send_message('Missing permissions for this command')
+            return
+
+        await ctx.response.defer()
+        print(f'Starting sync for guild {ctx.guild.id}...')
+        await tree.sync(guild=ctx.guild)
+        print(f'Synced for guild {ctx.guild.id}')
+        await ctx.followup.send('Forcibly synced')
+
+
+    async def get_user_has_role_for_interaction(ctx: discord.Interaction, role_name: str) -> bool:
+        """For some reason I couldn't get app_commands.checks.has_role working. Something is missing in the discordpy
+        cache. Since we're using this for really low frequency operations, I just refetch everything here to do
+        checks solidly."""
+        guild = await discord_client.fetch_guild(ctx.guild_id)
+
+        if guild is None:
+            return False
+
+        user: discord.Member = await guild.fetch_member(ctx.user.id)
+
+        if user is None:
+            return False
+
+        guild_roles = await guild.fetch_roles()
+
+        found_role = None
+        for r in guild_roles:
+            if r.name.lower() == role_name.lower():
+                found_role = r
+                break
+
+        if found_role is None:
+            return False
+
+        # For some reason, ctx.user.get_role doesn't work here because ctx.guild has an empty roles dictionary?
+        user_role = user.get_role(found_role.id)
+        return user_role is not None
+
+    async def try_append_emoji_to_message(message:discord.Message):
+        msg_tokens = sanitize_and_tokenize(message.content)
+        reaction_count = 0
+        max_reaction_count = 5
+        for token in msg_tokens:
+            configured_reaction_emoji = my_emoji_config.find_emoji_for_message_token(token, message.guild.id)
+            if configured_reaction_emoji is None:
+                continue
+
+            custom_emoji = await custom_emoji_cache.find_custom_emoji_with_name(message.guild, configured_reaction_emoji.emoji_str)
+
+            if custom_emoji is not None:
+                await message.add_reaction(custom_emoji)
+                reaction_count += 1
+            else:
+                try:
+                    await message.add_reaction(configured_reaction_emoji.emoji_str)
+                    reaction_count += 1
+                except:
+                    print(f'Failed to add emoji for {configured_reaction_emoji}')
+
+            if reaction_count >= max_reaction_count:
+                break
+
 
 if slack_bot_token:
     app = AsyncApp(token=slack_bot_token)
@@ -146,9 +387,15 @@ if app:
 #**********************</SLACK & DISCORD STUFF>**************************#
 
 
-def create_raw_response(incoming_message, is_slack):
+def create_raw_response(
+        incoming_message: str,
+        is_slack: bool,
+        force_mention: bool = False,
+        other_bot_names: Optional[List[str]] = None
+):
     msg_tokens = sanitize_and_tokenize(incoming_message)
-    if (bot_name.upper() in msg_tokens) or "TOWN" in msg_tokens:  # it's not _not_ a bug
+    mentioned = force_mention or any([n.upper() in msg_tokens for n in other_bot_names + [bot_name]])
+    if mentioned or "TOWN" in msg_tokens:  # it's not _not_ a bug
         if "GETGET10" in msg_tokens:
             return get_ten(is_slack)
         else:
